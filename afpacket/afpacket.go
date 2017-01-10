@@ -23,6 +23,8 @@ import (
 	"unsafe"
 
 	"github.com/emfree/gopacket"
+	"github.com/emfree/gopacket/layers"
+	"github.com/emfree/gopacket/pcap"
 )
 
 /*
@@ -448,5 +450,25 @@ func (h *TPacket) SetFanout(t FanoutType, id uint16) error {
 // WritePacketData transmits a raw packet.
 func (h *TPacket) WritePacketData(pkt []byte) error {
 	_, err := C.write(h.fd, unsafe.Pointer(&pkt[0]), C.size_t(len(pkt)))
+	return err
+}
+
+// SetBPFFilter compiles and sets a BPF filter for the TPacket handle.
+func (h *TPacket) SetBPFFilter(expr string) (err error) {
+	// Open a dummy pcap handle
+	p, err := pcap.OpenDead(layers.LinkTypeEthernet, int32(h.opts.frameSize))
+	if err != nil {
+		return err
+	}
+
+	bpf, err := p.NewBPF(expr)
+	if err != nil {
+		return err
+	}
+
+	program := bpf.BPF()
+
+	_, err = C.setsockopt(h.fd, C.SOL_SOCKET, C.SO_ATTACH_FILTER,
+		unsafe.Pointer(&program), C.socklen_t(unsafe.Sizeof(program)))
 	return err
 }
